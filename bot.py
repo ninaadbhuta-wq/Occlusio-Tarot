@@ -154,7 +154,7 @@ async def send_random_card(message: types.Message):
     # Если еще не тянул — записываем сегодняшнюю дату и выдаем карту
     user_last_draw[user_id] = today_date
     card = random.choice(TAROT_CARDS)
-    photo = FSInputFile(card["image"])
+    photo = FSInputFile(card["image"].replace("cards/", ""))
     caption_text = f"🔮 <b>{card['title']}</b>\n\n{card['message']}"
 
     await message.answer_photo(
