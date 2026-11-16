@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Карта дня</title>
+  <script src="https://telegram.org"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background: radial-gradient(circle at center, #1b1f1e 0%, #0b0d0c 100%);
+      color: #e6e2d8;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .hint {
+      font-size: 13px;
+      color: #9ba39e;
+      margin-bottom: 18px;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+      transition: opacity 0.4s ease;
+      z-index: 2;
+      text-align: center;
+    }
+
+    .card-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2;
+    }
+
+    /* Эффект тёмно-серой дымки при нажатии */
+    .smoke-layer {
+      position: absolute;
+      width: 340px;
+      height: 540px;
+      pointer-events: none;
+      z-index: 1;
+      opacity: 0;
+      transform: scale(0.75);
+      filter: blur(28px);
+      background:
+        radial-gradient(circle at 30% 35%, rgba(135, 145, 142, 0.55) 0%, transparent 55%),
+        radial-gradient(circle at 70% 60%, rgba(95, 102, 100, 0.6) 0%, transparent 60%),
+        radial-gradient(circle at 50% 50%, rgba(160, 168, 165, 0.35) 0%, transparent 70%);
+    }
+
+    .smoke-layer.animate {
+      animation: smokeBurst 1.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @keyframes smokeBurst {
+      0% {
+        opacity: 0;
+        transform: scale(0.75) rotate(0deg);
+      }
+      25% {
+        opacity: 0.95;
+        transform: scale(1.08) rotate(4deg);
+      }
+      100% {
+        opacity: 0.25;
+        transform: scale(1.32) rotate(-3deg);
+      }
+    }
+
+    .card-scene {
+      width: 270px;
+      height: 480px;
+      perspective: 1200px;
+      cursor: pointer;
+      position: relative;
+      z-index: 3;
+    }
+
+    .card {
+      width: 100%;
+      height: 100%;
+      position: relative;
+      transform-style: preserve-3d;
+      transition: transform 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+      border-radius: 18px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.85), 0 0 22px rgba(130, 160, 145, 0.15);
+    }
+
+    .card.is-flipped {
+      transform: rotateY(180deg);
+    }
+
+    .card-face {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+      border-radius: 18px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    .card-face img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .card-front {
+      transform: rotateY(180deg);
+    }
+
+    .prediction-box {
+      margin-top: 22px;
+      max-width: 340px;
+      text-align: center;
+      font-size: 15px;
+      line-height: 1.55;
+      color: #e6e2d8;
+      background: rgba(20, 24, 23, 0.75);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      padding: 16px 18px;
+      opacity: 0;
+      transform: translateY(12px);
+      transition: opacity 0.6s ease 0.3s, transform 0.6s ease 0.3s;
+      pointer-events: none;
+      z-index: 3;
+    }
+
+    .prediction-box.visible {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+
+    .prediction-box strong {
+      color: #c7d6ce;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="hint" id="hint">Коснись карты, чтобы узнать послание</div>
+
+  <div class="card-wrapper">
+    <div class="smoke-layer" id="smokeLayer"></div>
+    <div class="card-scene" id="cardScene">
+      <div class="card" id="card">
+        <div class="card-face card-back">
+          <img src="back.jpg" alt="Рубашка карты">
+        </div>
+        <div class="card-face card-front">
+          <img id="cardImage" src="" alt="Карта дня">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="prediction-box" id="predictionBox"></div>
+
+  <script>
+    const tg = window.Telegram?.WebApp;
+    if (tg) {
+      tg.ready();
+      tg.expand();
+    }
+
+    const cards = [
+      { img: "0.jpg", title: "Шут.", text: "Время шагнуть в неизвестность с лёгким сердцем, азартом и верой в удачу. Не бойся рисковать и пробовать новое — самые яркие приключения начинаются именно на краю привычного." },
+      { img: "1.jpg", title: "Маг.", text: "Сегодня все инструменты и ресурсы уже в твоих руках — просто бери и делай. Не жди подходящего момента, твоя личная сила и воля способны превратить любую идею в реальность." },
+      { img: "2.jpg", title: "Верховная Жрица.", text: "Не спеши действовать вслух — сегодня главная сила скрыта в твоей интуиции и тишине. Прислушайся к тайным знакам и внутреннему чутью, ответы уже хранятся внутри тебя." },
+      { img: "3.jpg", title: "Императрица.", text: "Наполни этот день красотой, заботой о себе и удовольствием от каждого момента. Позволь своей внутренней энергии расцвести — сегодня ты легко притягиваешь всё, чего желаешь." },
+      { img: "4.jpg", title: "Император.", text: "День твёрдой воли, личной власти и полного контроля над ситуацией. Наведи порядок в делах и мыслях — твоя решимость и внутренний стержень сегодня задают правила игры." },
+      { img: "5.jpg", title: "Иерофант.", text: "День мудрых решений, проверенных правил и поиска глубоких смыслов. Прислушайся к совету наставника или собственной интуиции, опираясь на свой главный внутренний кодекс." },
+      { img: "6.jpg", title: "Влюблённые.", text: "День сильного притяжения, искренних чувств и выбора, который подскажет только сердце. Поддайся этому сладкому искушению открыться миру или человеку рядом — сегодня честность с собой решает всё." },
+      { img: "7.jpg", title: "Колесница.", text: "Сегодня успех зависит от твоей решимости — крепко держи вожжи в своих руках и не сворачивай с пути. Смело двигайся к цели, любая преграда сейчас лишь проверка твоей воли." },
+      { img: "8.jpg", title: "Сила.", text: "Настоящая мощь сегодня кроется не в давлении, а в спокойной уверенности и мягкости. Укроти свои страхи и эмоции — терпение и внутренняя стойкость помогут справиться с любым вызовом." },
+      { img: "9.jpg", title: "Отшельник.", text: "Сегодня лучше приглушить внешний шум и побыть наедине с собственными мыслями. В тишине ты найдёшь те самые ответы, которые помогут зажечь твой внутренний свет." },
+      { img: "10.jpg", title: "Колесо Фортуны.", text: "Судьба запускает новый виток событий, где случайности оказываются совсем не случайными. Доверься потоку и лови удачный момент — перемены уже на пороге." },
+      { img: "11.jpg", title: "Справедливость.", text: "День ясности, честного баланса и точных решений без лишних эмоций. Поступай по совести и сохраняй хладнокровие — сегодня каждый получит ровно то, что заслужил." },
+      { img: "12.jpg", title: "Повешенный.", text: "Попробуй сегодня поставить дела на паузу и взглянуть на привычную ситуацию под совершенно новым углом. Иногда, чтобы сдвинуться с мёртвой точки, нужно просто перестать контролировать всё вокруг." },
+      { img: "13.jpg", title: "Смерть.", text: "Время смело отпустить всё, что давно отжило и тянет тебя назад. Не бойся закрыть старую дверь — именно за этим порогом начинается твоё настоящее перерождение." },
+      { img: "14.jpg", title: "Умеренность.", text: "День поиска идеального баланса между разумом и чувствами. Не торопи события — мягкая гармония и терпение сегодня приведут тебя к самому точному результату." },
+      { img: "15.jpg", title: "Дьявол.", text: "День сильных искушений, магнетизма и желаний, от которых сложно отвести взгляд. Позволь себе немного страсти и азарта, но помни, кто здесь на самом деле держит контроль." },
+      { img: "16.jpg", title: "Башня.", text: "Внезапная вспышка, которая разрушает всё хрупкое и ненастоящее в твоей жизни. Не держись за старые стены — эта встряска расчищает пространство для чего-то гораздо более сильного." },
+      { img: "17.jpg", title: "Звезда.", text: "Твой внутренний свет сегодня горит особенно ярко и притягивает удачу. Верь в свою мечту, наполняйся вдохновением и смело строй планы — вселенная готова поддержать твой путь." },
+      { img: "18.jpg", title: "Луна.", text: "День глубоких чувств, тайн и тонкого притяжения, когда логика уступает место интуиции. Доверься своим скрытым желаниям и внутреннему голосу — в полумраке эмоций сегодня скрыта главная правда." },
+      { img: "19.jpg", title: "Солнце.", text: "День яркого тепла, искренней радости и энергии, которая согревает всё вокруг. Смело открывайся миру и чувствам — сегодня свет на твоей стороне, а любые планы озаряются успехом." },
+      { img: "20.jpg", title: "Страшный Суд.", text: "День важного пробуждения, честности перед собой и шага на новый уровень. Прошлое окончательно отпускает — смело открывай врата в новую главу своей жизни." },
+      { img: "21.jpg", title: "Мир.", text: "Ощущение полной гармонии, когда все пазлы складываются в единую красивую картину. Насладись моментом целостности и близости — один важный цикл успешно завершён, и перед тобой открыты все дороги." }
+    ];
+
+    const cardScene = document.getElementById('cardScene');
+    const card = document.getElementById('card');
+    const cardImage = document.getElementById('cardImage');
+    const predictionBox = document.getElementById('predictionBox');
+    const hint = document.getElementById('hint');
+    const smokeLayer = document.getElementById('smokeLayer');
+
+    let isFlipped = false;
+
